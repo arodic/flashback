@@ -87,6 +87,38 @@ case 'refreshScreen':
   }
 ```
 
+### Playback Timing & Graphics Persistence
+
+**NOT a fixed frame rate system** - timing varies by cutscene:
+- Base clock: 60 Hz
+- Default _frameDelay: 5 → ~12 FPS
+- DEBUT: 7 → ~8.5 FPS
+- CHUTE: 6 → ~10 FPS
+
+**Graphics persist between frames** - accumulate-then-display model:
+1. Draw commands accumulate on back buffer
+2. `markCurPos` swaps buffers and displays
+3. `waitForSync` can hold frame for arbitrary time
+4. Only `refreshScreen` with clearMode != 0 clears
+
+Static scenes: draw once, hold with `waitForSync`
+Animation: redraw changed shapes each frame
+
+## Text Rendering System
+
+Text in cutscenes uses a **bitmap font system**, NOT polygons:
+- 8×8 pixel glyphs from `.FNT` files (FB_TXT.FNT for DOS)
+- Characters stored starting from ASCII 32 (space)
+- DOS format: 4-bit packed pixels (8×4 bytes per char)
+- Separate rendering path from polygon shapes
+- Drawn on top of vector graphics to same frame buffer
+
+**Cutscene text opcodes:**
+- `op_drawCaptionText` (opcode 6) - subtitle-style text at bottom of screen
+- `op_drawTextAtPos` (opcode 13) - text at arbitrary x,y position
+
+**String data:** Loaded from `.TBN` files or CINE text resources
+
 ## Data Format Reference
 
 ### POL Primitive Types
@@ -115,7 +147,7 @@ case 'refreshScreen':
 ### Data
 - [ ] Validate zoom values (seem like uint16 overflow?)
 - [ ] Check palette buffer switching logic
-- [ ] Verify text rendering (not implemented)
+- [ ] Implement text rendering (bitmap font from FNT, see Text Rendering System section)
 
 ### Player
 - [ ] Add cutscene selector dropdown

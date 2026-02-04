@@ -1,5 +1,38 @@
 # Archive - Flashback Cutscene Project
 
+## 2026-02-04: Cutscene Playback Timing Analysis
+
+**[ARCHITECTURE] Graphics persist between frames**
+- NOT 25 FPS - effective rate is ~10-12 FPS
+- Base clock 60Hz, _frameDelay is multiplier (default 5 = ~12 FPS)
+- Accumulate-then-display: draw commands build scene, markCurPos displays
+- Static scenes draw once, hold with waitForSync
+- Only refreshScreen with clearMode != 0 actually clears
+
+**[REFERENCE] Frame delays by cutscene:**
+- Default: 5 ticks (~83ms/frame, ~12 FPS)
+- DEBUT: 7 ticks (~117ms/frame, ~8.5 FPS)
+- CHUTE: 6 ticks (~100ms/frame, ~10 FPS)
+
+---
+
+## 2026-02-04: Text Rendering System Discovery
+
+**[ARCHITECTURE] Cutscene text uses bitmap fonts, not polygons**
+- Text rendered via separate system from polygon cutscene shapes
+- 8×8 pixel bitmap glyphs from FB_TXT.FNT (DOS)
+- DOS format: 4-bit packed pixels per character
+- Opcodes: op_drawCaptionText (6), op_drawTextAtPos (13)
+- String data from .TBN files
+
+**[TOOL] Added cutscene frame dumping to REminiscence**
+- New `--dump-cutscenes=PATH` command line option
+- Saves each frame as PNG to cutscenes/[scene]/frame###.png
+- Loop detection: duplicate frame checksum, visited command positions
+- Auto-selects first option in interactive menus (op_handleKeys)
+
+---
+
 ## 2026-02-04: Memory Discipline Reinforcement
 
 **[META] Added explicit reminder to project.mdc**
