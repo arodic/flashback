@@ -1,7 +1,7 @@
 # Working Memory - Flashback Cutscene Project
 
 ## Current Focus
-Cutscene viewer with Three.js - basic rendering working, needs verification against original
+Cutscene viewer with Three.js - loads directly from binary CMD/POL files, rendering verified working
 
 ## Game Data Version
 **PC DOS** - Current DATA directory contains PC DOS version files (not Amiga)
@@ -11,24 +11,30 @@ Cutscene viewer with Three.js - basic rendering working, needs verification agai
 
 ## Architecture
 
-### Data Flow
+### Data Flow (Current - Direct Binary Loading)
 ```
-DATA/*.CMD + DATA/*.POL (PC DOS, uncompressed)
-    ↓ parse_cmd.py + parse_pol.py
-public/data/*.json (structured data)
-    ↓ fetch in browser
-CutscenePlayer + OpcodeInterpreter + ShapeRenderer
+DATA/*.CMD + DATA/*.POL (PC DOS binary)
+    ↓ CutsceneLoader.loadAsync(name)
+    ↓ fetch as ArrayBuffer
+    ↓ CutsceneParser.parseCMD() + parsePOL()
+Cutscene object (shapes, palettes, script)
+    ↓ CutscenePlayer.loadCutscene()
+OpcodeInterpreter + ShapeRenderer
     ↓ Three.js
 WebGL canvas
-
-Alternative (Amiga):
-DEMO_UK.ABA (compressed archive)
-    ↓ bytekiller_unpack
-*.CMD + *.POL (raw binary)
-    ↓ same parsers
 ```
 
 ### Key Classes
+
+**CutsceneLoader** - Binary file loader (Three.js pattern)
+- Extends `Loader<Cutscene>` from Three.js
+- Fetches CMD + POL files in parallel
+- Uses CutsceneParser for binary parsing
+
+**CutsceneParser** - Binary parsing module
+- `parseCMD(buffer)` → Script object
+- `parsePOL(buffer)` → { shapes, palettes }
+- BinaryReader helper with DataView operations
 
 **CutscenePlayer** - Main orchestrator
 - Manages Three.js scene, camera, renderer
@@ -141,8 +147,8 @@ Text in cutscenes uses a **bitmap font system**, NOT polygons:
 
 ### Rendering
 - [ ] Verify concave polygon triangulation
-- [ ] Test all extracted cutscenes
 - [ ] Compare against REminiscence screenshots
+- [x] Test multiple cutscenes (INTRO1, CHUTE verified)
 
 ### Data
 - [ ] Validate zoom values (seem like uint16 overflow?)
@@ -150,16 +156,21 @@ Text in cutscenes uses a **bitmap font system**, NOT polygons:
 - [ ] Implement text rendering (bitmap font from FNT, see Text Rendering System section)
 
 ### Player
-- [ ] Add cutscene selector dropdown
+- [x] Add cutscene selector dropdown
+- [x] Direct binary loading (no JSON extraction)
 - [ ] Add speed control
 - [ ] Add frame scrubber
 
-## Package Locations
+## Source Files
 
 | Path | Contents |
 |------|----------|
-| `tools/` | Python extraction scripts |
-| `data/cutscenes/` | Extracted JSON files |
-| `/` | Three.js viewer app |
+| `src/CutsceneLoader.ts` | Three.js-style binary loader |
+| `src/CutsceneParser.ts` | CMD/POL binary parsing |
+| `src/CutscenePlayer.ts` | Main orchestrator |
+| `src/OpcodeInterpreter.ts` | Command execution |
+| `src/ShapeRenderer.ts` | Primitive rendering |
+| `src/types.ts` | TypeScript interfaces |
+| `tools/` | Python extraction scripts (legacy) |
 | `REminiscence/` | Original C++ source (reference) |
 | `.cursor/rules/cutscene-system.mdc` | Detailed cutscene system documentation |

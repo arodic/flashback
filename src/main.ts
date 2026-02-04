@@ -3,14 +3,14 @@
  */
 
 import { CutscenePlayer } from './CutscenePlayer'
+import { CutsceneLoader } from './CutsceneLoader'
 import type { Cutscene } from './types'
 
+// Create loader instance with path to DATA directory
+const cutsceneLoader = new CutsceneLoader().setBasePath('/DATA/')
+
 async function loadCutscene(name: string): Promise<Cutscene> {
-  const response = await fetch(`/data/${name}.json`)
-  if (!response.ok) {
-    throw new Error(`Failed to load cutscene: ${name}`)
-  }
-  return response.json()
+  return cutsceneLoader.loadAsync(name)
 }
 
 // Wait for DOM

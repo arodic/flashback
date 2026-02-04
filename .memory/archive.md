@@ -1,5 +1,27 @@
 # Archive - Flashback Cutscene Project
 
+## 2026-02-04: Binary Cutscene Loader Implementation
+
+**[ARCHITECTURE] Direct binary loading - no JSON extraction step**
+- CutsceneLoader extends Three.js `Loader<Cutscene>` pattern
+- CutsceneParser handles CMD/POL binary parsing with DataView
+- Loads directly from `/DATA/` directory
+
+**[FILES] New source files:**
+- `src/CutsceneLoader.ts` - Three.js-style loader with `loadAsync()`
+- `src/CutsceneParser.ts` - `parseCMD()` and `parsePOL()` functions
+- BinaryReader helper class for big-endian reads
+
+**[PATTERN] Three.js Loader gotcha:**
+- Base Loader class has `path` property that conflicts with getters
+- Solution: use separate `basePath` property with `setBasePath()` method
+
+**[VERIFIED] Working with multiple cutscenes:**
+- INTRO1: 277 shapes, 720 palettes, 261 frames
+- CHUTE: 85 shapes, 179 palettes, 172 frames
+
+---
+
 ## 2026-02-04: Cutscene Playback Timing Analysis
 
 **[ARCHITECTURE] Graphics persist between frames**
