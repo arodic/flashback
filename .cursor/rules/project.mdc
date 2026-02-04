@@ -356,7 +356,9 @@ Recommend starting with:
 |------|---------|---------|
 | `.memory/now.md` | Hot context - current focus only | Extremely aggressive |
 | `.memory/working.md` | Persistent curated memory | Based on archive patterns |
-| `.memory/archive.md` | Complete log of all memory commits | Never prune |
+| `.memory/archive.md` | Complete log of all memory commits | Never prune | 
+
+**DO NOT** load archive into context unless explicitly asked. It will grow large.
 
 ### now.md - Current Focus
 

@@ -248,14 +248,30 @@ const int y = 50;
 _gfx.setClippingRect(x, y, w, h);
 ```
 
-### Frame Timing
+### Frame Timing & Graphics Persistence
 
-- Base rate: 60 FPS (16.67ms per frame)
-- Frame delay multiplied: `frameDelay * (1000 / 60) - elapsed`
-- Different cutscenes use different delays:
-  - Default: 5 frames
-  - kCineDebut: 7 frames
-  - kCineChute: 6 frames
+**Timing Reference:** Base clock is 60 Hz, but `_frameDelay` acts as multiplier.
+
+| Cutscene | _frameDelay | Effective FPS |
+|----------|-------------|---------------|
+| Default | 5 | ~12 FPS |
+| DEBUT | 7 | ~8.5 FPS |
+| CHUTE | 6 | ~10 FPS |
+
+**Formula:** `pause = frameDelay * (1000 / 60) - elapsed`
+
+**IMPORTANT: Graphics persist between frames.** This is NOT a 1:1 command-per-frame system.
+
+The rendering model is **accumulate-then-display**:
+1. Multiple `drawShape` commands write to back buffer
+2. `op_refreshScreen` optionally clears the buffer (only if clearMode != 0)
+3. `op_markCurPos` swaps buffers → displays → clears back page
+4. `op_waitForSync` can hold a frame for arbitrary delay (`N * 4` ticks)
+
+This means:
+- Shapes drawn once stay visible until explicitly cleared
+- A static scene may have one draw followed by long `waitForSync`
+- Animation requires redrawing changed shapes each frame
 
 ---
 
