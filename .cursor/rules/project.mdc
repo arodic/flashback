@@ -1,0 +1,455 @@
+---
+description: REminiscence Engine Analysis - Flashback (1992) game engine reimplementation for TypeScript port
+globs:
+alwaysApply: true
+---
+
+# REminiscence Engine Analysis
+## *A C++ reimplementation of the Flashback (1992) game engine*
+
+---
+
+## Executive Summary
+
+REminiscence is a **reverse-engineered reimplementation** of the engine for **Flashback: The Quest for Identity** (1992) by Delphine Software. Written in C++ by Gregory Montoir (2005-2019), it runs the original game data files from various platforms.
+
+**Key Characteristics:**
+- ~15,000 lines of C++ code across ~50 source files
+- Uses SDL2 for platform abstraction (input, audio, video)
+- Supports multiple game data formats: DOS, Amiga, Macintosh, PC-98, Sega CD
+- 30 FPS game loop with dirty-rect rendering
+- Bytekiller compression unpacking for resources
+- Polygon-based cutscene system
+
+---
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                              main.cpp                               │
+│                     (Entry point, CLI parsing)                      │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                               Game                                  │
+│    (Central orchestrator: game loop, state, piege processing)       │
+├─────────────────────────────────────────────────────────────────────┤
+│  Contains:  Cutscene, Menu, Mixer, Resource, SeqPlayer, Video       │
+└─────────────────────────────────────────────────────────────────────┘
+         │                    │                    │
+         ▼                    ▼                    ▼
+┌─────────────┐     ┌──────────────┐     ┌─────────────────┐
+│  SystemStub │     │   Resource   │     │      Video      │
+│  (SDL2 HAL) │     │ (Data loader)│     │ (Rendering)     │
+└─────────────┘     └──────────────┘     └─────────────────┘
+         │                    │
+         │                    ▼
+         │          ┌──────────────────────────┐
+         │          │ ResourceAba / ResourceMac │
+         │          │ ResourcePaq / FileSystem  │
+         │          └──────────────────────────┘
+         │
+         ▼
+┌────────────────────────────────────────────────────────────────────┐
+│                               SDL2                                 │
+│        (Window, Rendering, Audio, Input, Timing)                   │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Core Components Deep Dive
+
+### 1. `Game` Class (`game.h/cpp`) - **Central Controller**
+
+The `Game` class is the **heart of the engine**. It manages:
+
+| Responsibility | Details |
+|---------------|---------|
+| **Main Loop** | `mainLoop()` - 30 FPS game tick |
+| **State Management** | Level, room, score, skill, player state |
+| **Piege System** | "PGE" (Piege = Game Entity) processing, ~100 opcodes |
+| **Collision Detection** | Grid-based + slot-based collision system |
+| **Animation Buffers** | 4 layered buffers for z-ordering sprites |
+| **Save/Load** | Save states + rewind buffer (120 frames, ~10 mins) |
+| **Input** | Demo playback support, input recording |
+
+**Key Data Structures:**
+- `LivePGE _pgeLive[256]` - Active game entities
+- `_pge_liveTable1[256]` - Entities indexed by room
+- `_pge_liveTable2[256]` - Entities indexed by index
+- `AnimBufferState _animBuffer*` - 4 animation layers
+
+**The Piege (PGE) System** is possibly the most complex part - it's a **scripted behavior system** where each entity has:
+- Object nodes with opcodes (opcode1, opcode2, opcode3)
+- Animation sequences
+- Messages for inter-entity communication
+- Collision data
+
+### 2. `Resource` Class (`resource.h/cpp`) - **Data Loading**
+
+Handles loading and parsing of **multiple game data formats**:
+
+| Format | Platform | Key Files |
+|--------|----------|-----------|
+| DOS | IBM PC | `.MAP`, `.PAL`, `.PGE`, `.OBJ`, `.ANI`, `.TBN`, `.FIB` |
+| Amiga | Commodore Amiga | `.LEV`, `.SPL`, `.OBC`, planar graphics |
+| Mac | Macintosh | Resource fork (`FLASHBACK.BIN`/`.RSRC`) |
+| PC-98 | NEC PC-98 | `.PAQ` archives |
+| Sega | Mega Drive/CD | Different sprite format |
+
+**Resource Types (26 types defined):**
+```cpp
+enum ObjectType {
+    OT_MBK,  // Map bank (tileset)
+    OT_PGE,  // Piege (entity) definitions
+    OT_PAL,  // Palette
+    OT_CT,   // Collision tiles
+    OT_MAP,  // Room map
+    OT_SPC,  // Special sprites (objects)
+    OT_RP,   // Resource pointers
+    OT_ANI,  // Animation sequences
+    OT_OBJ,  // Object behavior scripts
+    OT_TBN,  // Text strings
+    OT_SPR,  // Character sprites
+    OT_ICN,  // Icon sprites
+    OT_FNT,  // Font
+    OT_CMD,  // Cutscene commands
+    OT_POL,  // Cutscene polygons
+    // ... more
+};
+```
+
+**Compression:** Uses "Bytekiller" decompression (`unpack.cpp`) - a simple RLE-like algorithm common in Amiga games.
+
+### 3. `Video` Class (`video.h/cpp`) - **Rendering**
+
+**Key Properties:**
+- Screen: 256x224 (standard) or 512x448 (Macintosh 2x)
+- 8-bit indexed color (256 color palette)
+- Dirty-rect rendering via `_screenBlocks`
+
+**Rendering Pipeline:**
+1. Copy `_backLayer` → `_frontLayer`
+2. Process PIEGEs (entities) → draw to `_frontLayer`
+3. Draw UI (inventory icon, text)
+4. Copy dirty blocks to SDL texture
+5. Apply scaler if configured
+
+**Platform-specific decoders:**
+- `DOS_decodeMap()`, `DOS_decodeSpc()`, `DOS_decodeSpm()`
+- `AMIGA_decodeLev()`, `AMIGA_decodeSpm()`, `AMIGA_planar16()`
+- `MAC_decodeMap()`, `MAC_drawSprite()`
+- `SEGA_decodeSpc()`, `SEGA_decodeSpm()`
+
+### 4. `SystemStub` / `SystemStub_SDL` - **Platform Abstraction**
+
+Pure virtual interface implemented by SDL2:
+
+```cpp
+struct SystemStub {
+    virtual void init(...) = 0;
+    virtual void setPalette(const uint8_t *pal, int n) = 0;
+    virtual void copyRect(int x, int y, int w, int h, ...) = 0;
+    virtual void updateScreen(int shakeOffset) = 0;
+    virtual void processEvents() = 0;
+    virtual void sleep(int duration) = 0;
+    virtual uint32_t getTimeStamp() = 0;
+    virtual void startAudio(AudioCallback callback, void *param) = 0;
+    // ...
+};
+```
+
+**SDL Implementation handles:**
+- Window/renderer creation
+- Palette → RGB888 conversion
+- Scaling (point, linear, xBR, custom)
+- Widescreen modes (adjacent rooms, mirror, blur, CD-i borders)
+- Joystick/gamepad input
+- Audio callback (22050 Hz)
+
+### 5. `Mixer` Class (`mixer.h/cpp`) - **Audio System**
+
+Supports multiple music/sound formats:
+- **ModPlayer** - Amiga MOD tracker music
+- **SfxPlayer** - Sound effects
+- **OggPlayer** - Sega CD tracks (stb_vorbis)
+- **PrfPlayer** - DOS PRF music files
+- **CpcPlayer** - 3DO CPC background music
+
+Audio is mixed at 22050 Hz, 4 channels.
+
+### 6. `Cutscene` Class (`cutscene.h/cpp`) - **Polygon Cutscenes**
+
+The original Flashback is famous for its **vector-polygon cutscenes**:
+
+- 15 opcodes for shape drawing, palette, sync, text
+- Rotation/scaling transforms
+- Three pages: front, back, aux (for effects)
+- Separate data: `_cmd` (commands) and `_pol` (polygon vertices)
+
+---
+
+## Key Data Structures
+
+### `InitPGE` - Static Entity Definition
+```cpp
+struct InitPGE {
+    uint16_t type;
+    int16_t pos_x, pos_y;
+    uint16_t obj_node_number;  // Behavior script index
+    uint16_t life;
+    int16_t data[4];           // Entity-specific params
+    uint8_t object_type;       // 1=conrad, 10=monster
+    uint8_t init_room;
+    uint8_t icon_num;
+    uint8_t skill;             // Difficulty level
+    uint8_t flags;
+    uint16_t text_num;
+};
+```
+
+### `LivePGE` - Runtime Entity State
+```cpp
+struct LivePGE {
+    uint16_t obj_type;
+    int16_t pos_x, pos_y;
+    uint8_t anim_seq;
+    uint8_t room_location;
+    int16_t life;
+    int16_t counter_value;
+    uint8_t collision_slot;
+    uint16_t anim_number;
+    uint8_t flags;
+    LivePGE *next_PGE_in_room;
+    const InitPGE *init_PGE;
+    // ...
+};
+```
+
+### `Object` - Behavior Script Entry
+```cpp
+struct Object {
+    uint16_t type;
+    int8_t dx, dy;
+    uint16_t init_obj_type;
+    uint8_t opcode2, opcode1, opcode3;  // Condition/action opcodes
+    uint8_t flags;
+    int16_t opcode_arg1, opcode_arg2, opcode_arg3;
+};
+```
+
+---
+
+## Uncertain/Unclear Areas ⚠️
+
+1. **Piege Opcode Meanings** - Many opcodes are named `pge_o_unk0x*`. Their exact purpose is unclear without original source documentation. Example: `pge_o_unk0x2B`, `pge_o_unk0x70`.
+
+2. **Collision Data Format** - The collision slot system (`CollisionSlot`, `CollisionSlot2`) seems to implement a spatial hash, but the exact algorithm for `collision_data_len` and grid positioning is **partially reverse-engineered**.
+
+3. **Animation Offset Tables** - `_spmOffsetsTable` and similar static tables in `staticres.cpp` - how these were derived is undocumented.
+
+4. **Cutscene Timing** - The `_tstamp` and `_frameDelay` synchronization logic may have platform-specific quirks.
+
+5. **Object Flags Bitmasks** - Various flag bits (e.g., `flags & 0x60`, `flags & 0x80`) - meanings inferred from context but not fully documented.
+
+6. **Level-specific Workarounds** - Several hardcoded fixes for specific levels/rooms (e.g., level 4 room 60 palette fix, level 6 rooms 50-51 special message handling).
+
+---
+
+## TypeScript Port Considerations
+
+### Challenges
+
+| Challenge | Notes |
+|-----------|-------|
+| **Binary Data Parsing** | Extensive use of `READ_BE_UINT16`, `READ_LE_UINT32` etc. Need TypedArrays + DataView |
+| **Pointer Arithmetic** | Many `uint8_t *` pointer manipulations - convert to array indices |
+| **Union-like Structures** | Some buffers are reused for different purposes |
+| **Memory Management** | Manual malloc/free - let JS GC handle, but watch for leaks |
+| **SDL Dependencies** | Replace with Canvas API + Web Audio API |
+| **File I/O** | Replace with fetch/FileReader for web, or Node fs |
+| **Bitwise Operations** | JS handles these, but watch for signed/unsigned issues |
+
+### Recommended Architecture
+
+```
+TypeScript Port Structure:
+├── src/
+│   ├── core/
+│   │   ├── Game.ts           # Main game class
+│   │   ├── Resource.ts       # Resource loading
+│   │   ├── Video.ts          # Canvas rendering
+│   │   └── types.ts          # Shared interfaces
+│   ├── platform/
+│   │   ├── SystemStub.ts     # Abstract interface
+│   │   └── BrowserStub.ts    # Canvas/WebAudio impl
+│   ├── entities/
+│   │   ├── Piege.ts          # PGE system
+│   │   └── Collision.ts      # Collision detection
+│   ├── cutscene/
+│   │   ├── Cutscene.ts       # Polygon cutscenes
+│   │   └── SeqPlayer.ts      # SEQ video player
+│   ├── audio/
+│   │   ├── Mixer.ts          # Audio mixing
+│   │   └── ModPlayer.ts      # MOD playback
+│   └── utils/
+│       ├── binary.ts         # Binary reading helpers
+│       └── unpack.ts         # Bytekiller decompression
+```
+
+### Type Safety Opportunities
+
+The C++ code uses many `uint8_t`, `int16_t`, etc. TypeScript can provide:
+- Branded types for different ID types
+- Strict null checks for pointers-that-could-be-null
+- Discriminated unions for platform-specific code paths
+
+---
+
+## File Inventory
+
+| File | Purpose | Lines | Complexity |
+|------|---------|-------|------------|
+| `game.cpp` | Main game loop, PGE processing | ~2300 | High |
+| `piege.cpp` | Entity behavior opcodes | ~2300 | Very High |
+| `collision.cpp` | Collision detection | ~500 | High |
+| `resource.cpp` | Data loading | ~1900 | Medium |
+| `video.cpp` | Rendering | ~1150 | Medium |
+| `cutscene.cpp` | Polygon cutscenes | ~1100 | High |
+| `systemstub_sdl.cpp` | SDL2 backend | ~1100 | Medium |
+| `staticres.cpp` | Static data tables | ~3000 | Low (data) |
+| `mixer.cpp` | Audio mixing | ~300 | Medium |
+| `mod_player.cpp` | MOD music | ~600 | Medium |
+
+---
+
+## Questions for Further Investigation
+
+1. What is the exact algorithm for `pge_ZOrder*` callbacks? They seem to handle sprite z-ordering but logic is complex.
+
+2. How do the 4 animation buffers interact for layering? Current understanding: buffer 0=background objects, 1=Conrad, 2=foreground, 3=special?
+
+3. What triggers the "metro" special case checks in room loading?
+
+4. The Macintosh version uses LZSS compression (`decode_mac.cpp`) - is this standard LZSS or a variant?
+
+5. Save state format - is it stable across versions? The version check (`kSaveVersion = 3`) suggests changes have occurred.
+
+---
+
+## Port Strategy
+
+Recommend starting with:
+1. **Utility functions** (`intern.h` helpers, `unpack.cpp`)
+2. **Resource loading** - get data files parsing working
+3. **Video rendering** - display rooms/sprites
+4. **Game/Piege logic** - the most complex part, do last
+
+# Memory Management
+
+## Three-Tier Architecture
+
+| File | Purpose | Pruning |
+|------|---------|---------|
+| `.memory/now.md` | Hot context - current focus only | Extremely aggressive |
+| `.memory/working.md` | Persistent curated memory | Based on archive patterns |
+| `.memory/archive.md` | Complete log of all memory commits | Never prune |
+
+### now.md - Current Focus
+
+Read and update constantly during work sessions.
+
+**Aggressive pruning**: When starting new work, delete anything irrelevant to current context. Only keep:
+- Current task description
+- Key context needed right now
+- Active blockers / open questions
+
+Even if information is already in context window, iterating important things here reinforces focus. For anything that needs to persist beyond current task, use working memory.
+
+### working.md - Persistent Memory
+
+Curated knowledge that persists across sessions:
+- Architectural decisions and reasoning
+- Code patterns that worked
+- Code patterns that failed
+- Open design questions
+- Package-specific notes
+
+**Pruning strategy**: Use archive.md to identify access patterns. Items that appear frequently in archive have high value; items rarely referenced can be pruned.
+
+### archive.md - Access Pattern Proxy
+
+**NEVER load archive into context** unless explicitly asked. It will grow large.
+
+**Commit extremely aggressively.** After every response, consider if anything should be archived. No permission needed. Just do it.
+
+Log everything:
+- Decisions made
+- Problems solved  
+- Patterns discovered
+- Questions asked
+- Errors encountered
+- Approaches tried
+
+Since we cannot track actual memory access frequency, archive serves as proxy. Later analysis reveals:
+- What patterns keep appearing → high value, keep in working memory
+- What gets logged once and never again → low value, can prune
+
+Working memory pruning based on archive patterns is future work. For now, archive is just a dump.
+
+**Format**: Date-stamped entries with category tags for later analysis.
+
+## Memory Hygiene
+
+### Proactive Updates
+Don't wait for reminders. Update memory throughout sessions as significant things happen.
+
+### NEVER Ask Permission
+Commit to memory on your own. The judgment call is yours.
+
+**Commit frequency by tier:**
+- **archive.md**: Extremely aggressive. After every response, consider what to log. Just do it.
+- **now.md**: Aggressive. Update frequently, it gets pruned often anyway.
+- **working.md**: Conservative. Commit what feels important and persistent.
+
+### Memory Without Structure Becomes Noise
+- Consolidate similar items
+- Remove redundant entries
+- Keep files lean and scannable
+
+### Write Immediately
+Mental notes don't survive. If it matters, write it now.
+
+### Checkpoint Decisions, Not Just State
+Reasoning is more valuable than conclusions. Record why, not just what.
+
+## Session Workflow
+
+### Starting Work
+1. Read `.memory/now.md` — current focus
+2. Clear irrelevant items from now.md
+3. Read `.memory/working.md` if deeper context needed
+
+### During Work
+- Update now.md as focus shifts
+- Commit insights to archive.md
+- Move persistent learnings to working.md
+
+### Ending Work
+1. Update now.md with current state
+2. Commit session summary to archive.md
+3. Promote valuable insights to working.md
+4. Prune now.md to minimal state
+
+## CRITICAL: Memory Update Discipline
+
+**After EVERY response**: Consider what to log to archive.md. Do it silently.
+**Sporadically**: Update working.md when patterns emerge or decisions solidify.
+**Never ask** the user about memory updates. Just do it.
+
+---
+
+## Common Failure Modes

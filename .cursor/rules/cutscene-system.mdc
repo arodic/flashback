@@ -1,0 +1,423 @@
+---
+description: Flashback polygon cutscene rendering system - applies when working on cutscene-related code
+globs:
+alwaysApply: false
+---
+
+# Flashback Polygon Cutscene System
+
+This document describes the vector-polygon cutscene rendering system used in Flashback (1992). The cutscenes are **not** video files - they are **real-time rendered vector graphics** controlled by a bytecode interpreter.
+
+---
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Cutscene Class                           │
+│  (Orchestrator: loads data, runs opcode loop, manages state)    │
+├─────────────────────────────────────────────────────────────────┤
+│  _cmdPtr  ──▶ Command bytecode stream (opcodes + args)          │
+│  _polPtr  ──▶ Polygon data (shapes, vertices, palettes)         │
+└────────────────────────┬────────────────────────────────────────┘
+                         │
+         ┌───────────────┴───────────────┐
+         ▼                               ▼
+┌─────────────────────┐       ┌─────────────────────────┐
+│   Graphics Class    │       │   Triple Buffer System  │
+│  (Polygon rasterizer│       │  _frontPage (display)   │
+│   ellipse, line,    │       │  _backPage  (drawing)   │
+│   flood fill)       │       │  _auxPage   (effects)   │
+└─────────────────────┘       └─────────────────────────┘
+```
+
+---
+
+## Platform Variations
+
+The cutscene data is nearly identical across platforms, with minor packaging differences:
+
+| Platform | Packaging | Music | Notes |
+|----------|-----------|-------|-------|
+| PC DOS | Separate CMD/POL files, uncompressed | MIDI (.MID) | Current DATA directory |
+| Amiga | ABA archive, Bytekiller compressed | MOD tracker | Original version |
+| Macintosh | Resource fork, LZSS compressed | Different format | 2x resolution option |
+| PC-98 | PAQ archives | Different format | Japanese text |
+| Sega CD | Different format | CD audio | Also has SEQ FMV |
+
+**Current project uses PC DOS data files** - separate .CMD and .POL files with MIDI music.
+
+---
+
+## Data File Formats
+
+### CMD File (Command Bytecode)
+
+Sequential bytecode instructions. Each opcode is encoded in the upper 6 bits of a byte.
+
+**Structure:**
+```
+[uint16_t count]              # Number of sub-cutscenes
+[uint16_t offset_0]           # Offset to sub-cutscene 0
+[uint16_t offset_1]           # Offset to sub-cutscene 1
+...
+[uint16_t offset_n]           # Offset to sub-cutscene n
+[bytecode...]                 # Opcode stream starts at baseOffset = (count+1)*2
+```
+
+**Opcode Encoding:**
+```
+byte = (opcode << 2) | flags
+opcode = byte >> 2
+```
+
+### POL File (Polygon Data)
+
+Contains shape definitions, vertex data, and palettes.
+
+**Header Structure (Big Endian):**
+```
+Offset 0x02: uint16_t → shapeOffsetTable offset
+Offset 0x06: uint16_t → palette data offset
+Offset 0x0A: uint16_t → verticesOffsetTable offset
+Offset 0x0E: uint16_t → shapeDataTable offset
+Offset 0x12: uint16_t → verticesDataTable offset
+```
+
+**Shape Data Format:**
+```
+[uint16_t primitiveCount]     # Number of primitives in shape
+For each primitive:
+  [uint16_t verticesOffset]   # Flags in upper bits:
+                              #   0x8000 = has dx/dy offset
+                              #   0x4000 = has alpha color
+                              #   0x3FFF = actual offset index
+  [int16_t dx] (if 0x8000)    # X offset
+  [int16_t dy] (if 0x8000)    # Y offset
+  [uint8_t color]             # Palette index (0-31, added to 0xC0)
+```
+
+**Vertex Data Format:**
+```
+[uint8_t numVertices]         # Special values:
+                              #   0x00 = single point
+                              #   0x80+ = ellipse
+                              #   else = polygon vertex count
+
+For Point (numVertices == 0):
+  [int16_t x, y]              # Absolute position
+
+For Ellipse (numVertices & 0x80):
+  [int16_t cx, cy]            # Center position
+  [int16_t rx, ry]            # X and Y radii
+
+For Polygon (else):
+  [int16_t ix, iy]            # Initial vertex (absolute)
+  For remaining vertices:
+    [int8_t dx, dy]           # Delta from previous vertex
+```
+
+---
+
+## Opcode Reference
+
+| Opcode | Name | Description |
+|--------|------|-------------|
+| 0x00 | op_markCurPos | Mark command position, set frame delay (5-7), update screen, clear back page |
+| 0x01 | op_refreshScreen | Read clear mode byte; if non-zero, clear back page |
+| 0x02 | op_waitForSync | Wait N frames (credits) or N*4 frames (normal) |
+| 0x03 | op_drawShape | Draw shape at optional x,y offset (no transformation) |
+| 0x04 | op_setPalette | Load palette number into buffer |
+| 0x05 | (alias) | Same as op_markCurPos |
+| 0x06 | op_drawCaptionText | Draw subtitle text by string ID |
+| 0x07 | op_nop | No operation |
+| 0x08 | op_skip3 | Skip 3 bytes in command stream |
+| 0x09 | op_refreshAll | Refresh screen and handle input |
+| 0x0A | op_drawShapeScale | Draw shape with zoom factor |
+| 0x0B | op_drawShapeScaleRotate | Draw shape with 3D rotation + zoom |
+| 0x0C | op_copyScreen | Copy front→back, update screen |
+| 0x0D | op_drawTextAtPos | Draw text at specific x,y position |
+| 0x0E | op_handleKeys | Input-driven branching in command stream |
+
+### Opcode Argument Formats
+
+**op_drawShape (0x03):**
+```
+[uint16_t shapeOffset]        # Flags: 0x8000 = has position
+[int16_t x] (if 0x8000)
+[int16_t y] (if 0x8000)
+```
+
+**op_drawShapeScale (0x0A):**
+```
+[uint16_t shapeOffset]        # Same flags as above
+[int16_t x] (if 0x8000)
+[int16_t y] (if 0x8000)
+[uint16_t zoom]               # Added to 512 base
+[uint8_t shape_ix]            # Shape origin X
+[uint8_t shape_iy]            # Shape origin Y
+```
+
+**op_drawShapeScaleRotate (0x0B):**
+```
+[uint16_t shapeOffset]        # Flags: 0x8000=pos, 0x4000=zoom, 0x2000=r2, 0x1000=r3
+[int16_t x] (if 0x8000)
+[int16_t y] (if 0x8000)
+[uint16_t zoom] (if 0x4000)
+[uint8_t shape_ix, shape_iy]
+[uint16_t r1]                 # Rotation angle (degrees)
+[uint16_t r2] (if 0x2000)     # Vertical distort (default 180)
+[uint16_t r3] (if 0x1000)     # Horizontal distort (default 90)
+```
+
+---
+
+## Transformation System
+
+### Rotation Matrix
+
+The 3D rotation uses three angles to build a 2x2 transformation matrix:
+
+```
+a = rotation angle (0-359)
+b = vertical scale/distort (180 = identity)
+c = horizontal scale/distort (90 = identity)
+
+_rotMat[0] = cos(a)*cos(b) - cos(c)*sin(a)*sin(b)
+_rotMat[1] = sin(a)*cos(b) + cos(c)*cos(a)*sin(b)
+_rotMat[2] = sin(c)*sin(a)
+_rotMat[3] = -sin(c)*cos(a)
+```
+
+Trig functions use 8-bit fixed point (value * 256).
+
+### Zoom/Scale
+
+Zoom uses 16-bit fixed point with base value 512:
+- `zoom = 512` = 1.0x scale (identity)
+- `zoom = 1024` = 2.0x scale
+- Values added to 512 base in opcodes
+
+Coordinate calculation: `(coord * zoom * 128 + 0x8000) >> 16`
+
+### Multi-Primitive Shape State
+
+When a shape has multiple primitives, state is tracked between primitives:
+
+```cpp
+// Position tracking for smooth animation between primitives
+_shape_cur_x, _shape_cur_y     // Current logical position
+_shape_prev_x, _shape_prev_y   // Previous primitive's position
+_shape_cur_x16, _shape_cur_y16 // Fixed-point current (<<16)
+_shape_prev_x16, _shape_prev_y16 // Fixed-point previous
+_shape_ox, _shape_oy           // Origin from first primitive
+_shape_ix, _shape_iy           // Shape center offset
+_shape_count                   // Primitive index in current shape
+```
+
+**UNCERTAIN:** The exact interpolation algorithm for multi-primitive shapes is complex. The state machine ensures smooth animation when shapes are composed of multiple parts.
+
+---
+
+## Rendering Pipeline
+
+### Triple Buffer System
+
+```
+1. clearBackPage()
+   - If _clearScreen == 0: copy _auxPage → _backPage (preserve previous frame)
+   - If _clearScreen != 0: memset _backPage to 0xC0 (clear to background)
+
+2. Draw operations write to _backPage via Graphics class
+
+3. updateScreen()
+   - sync(_frameDelay - 1)  // Wait for frame timing
+   - updatePalette()        // Apply any palette changes
+   - SWAP(_frontPage, _backPage)
+   - Copy _frontPage to SDL surface
+   - _stub->updateScreen()
+```
+
+### Clipping Region
+
+Cutscenes render to a centered 240x128 viewport:
+```cpp
+const int w = 240, h = 128;
+const int x = (256 - w) / 2;  // 8
+const int y = 50;
+_gfx.setClippingRect(x, y, w, h);
+```
+
+### Frame Timing
+
+- Base rate: 60 FPS (16.67ms per frame)
+- Frame delay multiplied: `frameDelay * (1000 / 60) - elapsed`
+- Different cutscenes use different delays:
+  - Default: 5 frames
+  - kCineDebut: 7 frames
+  - kCineChute: 6 frames
+
+---
+
+## Graphics Primitives
+
+### Polygon Rasterization
+
+The `drawPolygon()` function uses scanline conversion:
+
+1. Find min/max Y vertices
+2. Walk left and right edges simultaneously
+3. Calculate x-coordinates at each scanline using fixed-point stepping
+4. Store (x1, x2) pairs in `_areaPoints` buffer
+5. Call `fillArea()` to draw horizontal spans
+
+**UNCLEAR:** The goto-based control flow in `drawPolygon()` is difficult to follow. It handles various edge cases for clipping and edge walking.
+
+### Alpha Color Mode
+
+When `hasAlpha` is true and color > 0xC7:
+```cpp
+*(dst + x) |= color & ~7;  // OR blend with existing color
+```
+
+**UNCERTAIN:** The exact purpose and visual effect of this blending mode is unclear. It appears to be a transparency or overlay effect.
+
+### Concave Polygon Handling
+
+For the MacPlay logo (concave polygon), flood fill is used instead:
+```cpp
+if (_isConcavePolygonShape) {
+    _gfx.floodFill(_primitiveColor, _vertices, numVertices);
+} else {
+    _gfx.drawPolygon(_primitiveColor, _hasAlphaColor, _vertices, numVertices);
+}
+```
+
+---
+
+## Palette System
+
+- 32-color palette mapped to indices 0xC0-0xDF
+- Two palette buffers (double buffering for transitions)
+- Colors stored as 16-bit format: `0x0RGB` (4 bits per channel)
+- Same format used in both PC DOS and Amiga versions
+
+```cpp
+// Color conversion (Amiga and PC DOS use same POL format)
+Color c;
+c.r = ((color >> 8) & 0xF) * 17;  // 0-15 → 0-255
+c.g = ((color >> 4) & 0xF) * 17;
+c.b = (color & 0xF) * 17;
+```
+
+Palette slot selection based on `_clearScreen` state:
+- `_clearScreen != 0`: Use base palette (color + 0xC0)
+- `_clearScreen == 0`: Use secondary palette (color + 0x10 + 0xC0)
+
+---
+
+## Text System
+
+### Font
+- 8x8 pixel characters
+- Standard ASCII font or Japanese font (`_font8Jp`)
+
+### Text Formatting
+- Newline character: `|` (ASCII) or `0xD1` (Japanese)
+- `0xA` = end of string
+- `0x20` = space (advance x by 8)
+- `0x09` = tab (ignored)
+
+### Justification Modes
+```cpp
+enum {
+    kTextJustifyLeft = 0,   // Left aligned
+    kTextJustifyAlign = 1,  // Block justify
+    kTextJustifyCenter = 2  // Centered
+};
+```
+
+---
+
+## SEQ Video Player (Separate System)
+
+For Sega CD FMV cutscenes - **different from polygon cutscenes**.
+
+### Format
+- Frame size: 6144 bytes
+- Video: 256x128, 8x8 block-based codec
+- Audio: 882 samples per frame (22050 Hz mono → stereo)
+- Playback: 25 FPS
+
+### Video Codec
+Three operations per 8x8 block (2-bit selector):
+- 0: Skip (no change)
+- 1: RLE/palette-indexed decode
+- 2: Raw 64-byte copy
+- 3: Sparse pixel updates
+
+---
+
+## TypeScript Porting Considerations
+
+### Data Structures
+```typescript
+interface Point {
+    x: number;  // int16
+    y: number;  // int16
+}
+
+interface Color {
+    r: number;  // uint8
+    g: number;
+    b: number;
+}
+
+interface CutsceneState {
+    cmdPtr: number;       // Current position in command buffer
+    cmdStartPtr: number;  // Start of current frame's commands
+    polPtr: Uint8Array;   // Polygon data buffer
+    cmdData: Uint8Array;  // Command data buffer
+    frameDelay: number;
+    clearScreen: number;
+    // ... shape state variables
+}
+```
+
+### Key Challenges
+
+1. **Binary Data Parsing**: Heavy use of `READ_BE_UINT16`, `READ_LE_UINT32` - use DataView
+2. **Fixed-Point Math**: 16-bit fractional parts (`<< 16`, `>> 16`, `+ 0x8000` for rounding)
+3. **Pointer Arithmetic**: Convert `const uint8_t *p = data + offset` to array indices
+4. **Signed/Unsigned**: JavaScript bitwise ops return signed 32-bit; use `>>> 0` for unsigned
+
+### Suggested Module Structure
+```
+cutscene/
+├── Cutscene.ts           # Main orchestrator, opcode dispatcher
+├── CutsceneOpcodes.ts    # Opcode implementations
+├── CutsceneGraphics.ts   # Polygon/ellipse rendering
+├── CutsceneData.ts       # POL/CMD data parsing
+├── RotationMatrix.ts     # 3D transform math
+└── types.ts              # Interfaces
+```
+
+---
+
+## Known Issues & Edge Cases
+
+1. **Amiga ESPIONS cutscene bug**: Opcode order is wrong, patched at runtime
+2. **Mac concave polygon**: MacPlay logo requires flood fill, not scanline
+3. **VOYAGE cutscene timing**: Special screen refresh timing for string 0x45
+4. **Memo cutscene shapes**: Optional overlay shapes drawn during op_copyScreen
+
+---
+
+## Debug Flags
+
+```cpp
+DBG_CUT  // Cutscene debug output
+DBG_VIDEO // Graphics primitive debug
+```
+
+Enable with `--debug=cut,video` or similar.
