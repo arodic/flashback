@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Flashback Cutscene Viewer</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      
+      body {
+        background: #1a1a2e;
+        color: #eee;
+        font-family: 'JetBrains Mono', 'Fira Code', monospace;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 20px;
+      }
+      
+      #canvas-container {
+        background: #000;
+      }
+      
+      #canvas-container canvas {
+        image-rendering: pixelated;
+        image-rendering: crisp-edges;
+      }
+      
+      .controls {
+        margin-top: 20px;
+        display: flex;
+        gap: 10px;
+      }
+      
+      button {
+        background: #16213e;
+        color: #00d9ff;
+        border: 1px solid #00d9ff;
+        padding: 8px 16px;
+        cursor: pointer;
+        font-family: inherit;
+        transition: all 0.2s;
+      }
+      
+      button:hover {
+        background: #00d9ff;
+        color: #16213e;
+      }
+      
+      select {
+        background: #16213e;
+        color: #00d9ff;
+        border: 1px solid #00d9ff;
+        padding: 8px 12px;
+        font-family: inherit;
+        cursor: pointer;
+        appearance: none;
+        padding-right: 28px;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2300d9ff'%3E%3Cpath d='M2 4l4 4 4-4'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 8px center;
+      }
+      
+      select:hover, select:focus {
+        background-color: #1e2b4a;
+        outline: none;
+      }
+      
+      
+      .info {
+        margin-top: 20px;
+        font-size: 0.9rem;
+        color: #888;
+      }
+      
+      #frame-info {
+        color: #00d9ff;
+      }
+      
+      #audio-info {
+        color: #ff9f00;
+        margin-left: 20px;
+      }
+      
+      #audio-info.no-audio {
+        color: #666;
+      }
+      
+      #audio-info.midi {
+        color: #00ff88;
+      }
+      
+      /* Instrument Mapper */
+      #instrument-mapper {
+        margin-top: 20px;
+        padding: 15px;
+        background: #16213e;
+        border: 1px solid #00d9ff;
+        max-width: 900px;
+        width: 100%;
+      }
+      
+      #instrument-mapper h3 {
+        margin: 0 0 10px 0;
+        color: #00d9ff;
+        font-size: 0.9rem;
+      }
+      
+      .mapper-header {
+        display: grid;
+        grid-template-columns: 30px 40px 150px 80px;
+        gap: 8px;
+        padding: 4px 8px;
+        color: #666;
+        font-size: 0.7rem;
+        border-bottom: 1px solid #333;
+        margin-bottom: 4px;
+      }
+      
+      .channel-row {
+        display: grid;
+        grid-template-columns: 30px 40px 150px 80px;
+        gap: 8px;
+        padding: 4px 8px;
+        align-items: center;
+        background: #1a1a2e;
+        margin-bottom: 2px;
+        font-size: 0.8rem;
+      }
+      
+      .channel-row.muted {
+        opacity: 0.5;
+      }
+      
+      .channel-row input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+      }
+      
+      .channel-row .ch-num {
+        color: #00d9ff;
+        font-weight: bold;
+      }
+      
+      .channel-row select {
+        background: #16213e;
+        color: #00ff88;
+        border: 1px solid #333;
+        padding: 2px 4px;
+        font-family: inherit;
+        font-size: 0.75rem;
+        cursor: pointer;
+        width: 100%;
+      }
+      
+      .channel-row input[type="number"] {
+        background: #16213e;
+        color: #ff9f00;
+        border: 1px solid #333;
+        padding: 2px 4px;
+        font-family: inherit;
+        font-size: 0.8rem;
+        width: 60px;
+        text-align: center;
+      }
+      
+    </style>
+    <script type="module" crossorigin src="/assets/index-BLTLfuBt.js"></script>
+  </head>
+  <body>
+    <div id="canvas-container"></div>
+    <div class="controls">
+      <select id="cutscene-select">
+        <option value="alimpont">ALIMPONT - Bridge Entry</option>
+        <option value="asc">ASC - Elevator</option>
+        <option value="camera">CAMERA - Camera</option>
+        <option value="carte">CARTE - ID Card</option>
+        <option value="chute">CHUTE - Fall Scene</option>
+        <option value="debut">DEBUT - Opening</option>
+        <option value="desinteg">DESINTEG - Disintegration</option>
+        <option value="espions">ESPIONS - Aliens Meeting</option>
+        <option value="fin">FIN - Ending</option>
+        <option value="gen">GEN - Generator</option>
+        <option value="genexp">GENEXP - Generator Explosion</option>
+        <option value="holoseq">HOLOSEQ - Hologram</option>
+        <option value="intro1" selected>INTRO1 - Intro Part 1</option>
+        <option value="intro2">INTRO2 - Intro Part 2</option>
+        <option value="lift">LIFT - Lift</option>
+        <option value="log">LOG - Login</option>
+        <option value="logosssi">LOGOSSSI - SSI Logo</option>
+        <option value="map">MAP - Map Screen</option>
+        <option value="memo">MEMO - Memory Scene</option>
+        <option value="metro">METRO - Metro</option>
+        <option value="missions">MISSIONS - Mission Brief</option>
+        <option value="objet">OBJET - Object Scene</option>
+        <option value="over">OVER - Game Over</option>
+        <option value="pont">PONT - Bridge</option>
+        <option value="score">SCORE - Score</option>
+        <option value="serrure">SERRURE - Lock</option>
+        <option value="taxi">TAXI - Taxi Scene</option>
+        <option value="teleport">TELEPORT - Teleporter</option>
+        <option value="voyage">VOYAGE - Travel Scene</option>
+      </select>
+      <button id="btn-prev">|◀</button>
+      <button id="btn-play">▶ Play</button>
+      <button id="btn-next">▶|</button>
+    </div>
+    <div class="info">
+      <span id="frame-info">Frame: 0 / 0</span>
+      <span id="audio-info" class="no-audio">No audio</span>
+    </div>
+    <div id="instrument-mapper">
+      <h3>Instrument Mapper</h3>
+      <div class="mapper-header">
+        <span>On</span>
+        <span>Ch</span>
+        <span>Instrument</span>
+        <span>Octave</span>
+      </div>
+      <div id="channel-rows">
+        <!-- Populated dynamically -->
+      </div>
+    </div>
+    
+    
+  </body>
+</html>
