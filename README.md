@@ -11,6 +11,38 @@ This project loads the original DOS game data files directly and renders the vec
 - **Authentic OPL3 audio** - Native FM synthesis via libadlmidi-js WebAssembly emulator
 - **Frame-accurate playback** - Implements original timing system (60Hz base clock with frame delay multipliers)
 
+## Game Files Required
+
+This project requires the original Flashback PC DOS game files, which are **not included** due to copyright.
+
+### How to Obtain
+
+Purchase Flashback from one of these sources:
+- [GOG.com](https://www.gog.com/game/flashback) (~$6)
+- [Steam](https://store.steampowered.com/app/961620/Flashback/) (~$8)
+
+### Installation
+
+1. After purchasing, locate the game's DATA folder:
+   - **GOG**: `<install path>/DATA/`
+   - **Steam**: `<Steam>/steamapps/common/Flashback/DATA/`
+
+2. Copy the following files to the `DATA/` folder in this project:
+
+   ```
+   DATA/
+   ├── *.CMD    (29 files) - Cutscene commands
+   ├── *.POL    (29 files) - Cutscene polygons
+   ├── *.MID    (11 files) - MIDI music
+   ├── *.PRF    (28 files) - Instrument config
+   └── *.INS    (29 files) - AdLib instruments
+   ```
+
+3. Verify with:
+   ```bash
+   ls DATA/*.CMD | wc -l   # Should show 29
+   ```
+
 ## Quick Start
 
 ```bash
@@ -191,4 +223,6 @@ See [.memory/archive.md](.memory/archive.md) for detailed development history.
 
 ## License
 
-The viewer code is open source. The original Flashback game data files are copyrighted by Delphine Software/U.S. Gold.
+The viewer code is open source under the MIT license.
+
+The original Flashback game data files are **copyrighted by Microids** (current rights holder) and must be purchased separately. This project does not distribute any copyrighted game assets.
