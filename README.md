@@ -53,7 +53,7 @@ Flashback/
 │   ├── *.PRF                # Instrument configuration
 │   └── *.INS                # AdLib instrument patches
 ├── reference/               # REminiscence C++ source + frame dumps
-│   ├── *.cpp                # Original engine source (for reference)
+│   ├── *.cpp                # REminiscence reimplementation (multi-platform support)
 │   └── cutscenes/           # PNG frame dumps for pixel comparison
 └── public/
     ├── flashback-instruments.json

@@ -1,5 +1,29 @@
 # Archive - Flashback Cutscene Project
 
+## 2026-02-05: README.md Overhaul
+
+**Category:** Documentation
+
+**What was done:**
+Complete rewrite of README.md to reflect current project state.
+
+**Removed:**
+- Three.js references (replaced by Canvas 2D months ago)
+- Python extraction tools (binary loading is direct now)
+- JSON intermediate format documentation
+- Old directory structure (tools/, packages/, data/)
+
+**Added:**
+- Canvas 2D graphics pipeline diagram
+- OPL3 audio pipeline diagram
+- Current source file inventory with purposes
+- Known Issues & Challenges tables (graphics edge pixels, audio mapping, autoplay)
+- Architecture decisions with rationale
+- Build/deploy instructions with path rules
+- Development history section
+
+---
+
 ## 2026-02-04: InsToOpl3 Field Naming Mismatch
 
 **[BUG] libadlmidi-js expected different field names**
