@@ -150,7 +150,7 @@ async function renderCutsceneFrame(
   
   try {
     // Load cutscene
-    const loader = new CutsceneLoader().setBasePath('/DATA/')
+    const loader = new CutsceneLoader().setBasePath('./DATA/')
     const cutscene = await loader.loadAsync(cutsceneName)
     
     // Create player at native resolution (no CSS scaling for testing)

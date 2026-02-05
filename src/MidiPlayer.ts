@@ -77,7 +77,7 @@ export class MidiPlayer {
   private availableInstruments: string[] = []
   
   constructor(options: MidiPlayerOptions = {}) {
-    this.basePath = options.basePath ?? '/DATA/'
+    this.basePath = options.basePath ?? './DATA/'
   }
   
   /**

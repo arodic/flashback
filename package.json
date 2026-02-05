@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "git checkout index.html 2>/dev/null; vite",
-    "build": "tsc && vite build",
+    "dev": "cp index.src.html index.html && vite",
+    "build": "cp index.src.html index.html && tsc && vite build",
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run"

@@ -19,7 +19,7 @@ const volumeModelNames: Record<number, string> = {
 }
 
 // Create loader instance with path to DATA directory
-const cutsceneLoader = new CutsceneLoader().setBasePath('/DATA/')
+const cutsceneLoader = new CutsceneLoader().setBasePath('./DATA/')
 
 async function loadCutscene(name: string): Promise<Cutscene> {
   return cutsceneLoader.loadAsync(name)
@@ -45,7 +45,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   const player = new CutscenePlayer({
     container,
     displayScale: 3,
-    midiBasePath: '/DATA/',
+    midiBasePath: './DATA/',
     enableAudio: true
   })
   

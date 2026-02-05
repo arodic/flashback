@@ -1,23 +1,31 @@
 # Now - Current Focus
 
 ## Active Task
-Cleaned up MidiPlayer.ts - removed dead code from audio debugging attempts
+Configured deployment for GitHub Pages subdirectory
 
 ## Recent Change
-Simplified MidiPlayer.ts from 978 lines to ~485 lines:
-- Removed `analyzeMidi()` (120 line MIDI parser that didn't fix the issue)
-- Removed `calculateOctaveWrapOffset()` workaround
-- Simplified `loadAndInjectInstruments()` to direct slot→channel mapping
-- Extracted `loadInsFile()` helper for cleaner code
-- Kept all debug interface: channel muting, instrument swapping, octave offset, note testing
+All paths now relative (no leading `/`) for subdirectory deployment:
+- `vite.config.ts`: Added `base: './'`
+- Build outputs to project root (not dist/)
+- `index.src.html` = source (tracked), `index.html` = built output
 
-## Debug Interface (preserved)
-- `muteChannel()` / `unmuteChannel()` / `toggleMuteChannel()`
-- `getChannels()` / `onChannelChange()`
-- `setChannelInstrument()` / `getAvailableInstruments()`
-- `setChannelOctaveOffset()`
-- `noteOn()` / `noteOff()` / `allNotesOff()`
+## Path Rules
+**CRITICAL**: All paths must be relative:
+- `./DATA/` not `/DATA/`
+- `./src/main.ts` not `/src/main.ts`
+- `./assets/` not `/assets/`
+
+## Build/Dev Workflow
+- `npm run dev` - Copies index.src.html to index.html, runs dev server
+- `npm run build` - Builds to root (index.html, assets/)
+
+## Deploy (GitHub Pages)
+Upload entire root folder:
+- `index.html` (built)
+- `assets/`
+- `DATA/`
+- `flashback-instruments.json`, `flashback.wopl`
 
 ## Quick Reference
-- Dev server: `pnpm dev` (running at http://localhost:3001/)
+- Dev server: `pnpm dev` or `npm run dev`
 - TypeScript check: `npx tsc --noEmit`

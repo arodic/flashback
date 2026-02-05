@@ -522,3 +522,27 @@ Cleaned up MidiPlayer.ts, removing dead code from audio debugging attempts that 
 
 **Rationale:**
 The MIDI analysis code was an attempt to figure out the correct track-to-instrument mapping, but it didn't solve the audio issues. The simpler direct mapping (slot N → channel N) is easier to debug and maintains the same behavior.
+
+---
+
+## 2026-02-05: Deployment Configuration (GitHub Pages)
+
+**Category:** Build/Deploy
+
+**Problem:** Deploying to GitHub Pages subdirectory failed because paths started with `/` (absolute from domain root).
+
+**Changes:**
+
+1. **vite.config.ts** - Added `base: './'` for relative asset paths
+2. **Build output to root** - `build.outDir: '.'` so deployment is just uploading root folder
+3. **Source HTML separation** - `index.src.html` is the development version (tracked in git), `index.html` is built output
+4. **Dev script** - `cp index.src.html index.html && vite` restores source before dev server
+
+**Path fixes (all changed from `/X` to `./X`):**
+- `src/main.ts`: `./DATA/` base path
+- `src/MidiPlayer.ts`: `./DATA/` default base path
+- `src/CutscenePlayer.ts`: `./DATA/` default midi path
+- `src/frameComparison.test.ts`: `./DATA/` base path
+- `index.src.html`: `./src/main.ts` script src
+
+**Rule:** All paths must be relative (no leading `/`) for subdirectory deployment.

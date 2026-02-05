@@ -77,7 +77,7 @@ export class CutscenePlayer {
     
     // Create MIDI player (OPL3 synthesis)
     this.midiPlayer = new MidiPlayer({
-      basePath: options.midiBasePath ?? '/DATA/'
+      basePath: options.midiBasePath ?? './DATA/'
     })
     
     // Forward MIDI state changes
