@@ -491,3 +491,34 @@ This plays the original .MID files through authentic AdLib FM synthesis.
 - Authentic DOS game sound - same FM synthesis technology
 - No audio conversion required - works with original game files
 - True to retro gaming spirit - playing original assets
+
+---
+
+## 2026-02-05: MidiPlayer.ts Cleanup
+
+**Category:** Code cleanup, simplification
+
+**What was done:**
+Cleaned up MidiPlayer.ts, removing dead code from audio debugging attempts that didn't fix the underlying instrument mapping issues.
+
+**Removed (~500 lines):**
+- `analyzeMidi()` - 120 line MIDI parser that scanned for track/channel/program info
+- `MidiAnalysis` interface and related types
+- `calculateOctaveWrapOffset()` - workaround for high notes
+- Complex instrument mapping logic using program→slot and track→channel mappings
+- `currentMidiAnalysis` state property
+
+**Simplified:**
+- `loadAndInjectInstruments()` now uses direct slot→channel mapping (PRF slot N → MIDI channel N)
+- Extracted `loadInsFile()` as reusable helper
+- Reduced from 978 lines to ~485 lines
+
+**Preserved (debug interface):**
+- Channel muting: `muteChannel()`, `unmuteChannel()`, `toggleMuteChannel()`
+- Channel info: `getChannels()`, `onChannelChange()`, `getAvailableInstruments()`
+- Instrument swapping: `setChannelInstrument()`
+- Octave offset: `setChannelOctaveOffset()`
+- Note testing: `noteOn()`, `noteOff()`, `allNotesOff()`
+
+**Rationale:**
+The MIDI analysis code was an attempt to figure out the correct track-to-instrument mapping, but it didn't solve the audio issues. The simpler direct mapping (slot N → channel N) is easier to debug and maintains the same behavior.

@@ -1,19 +1,23 @@
 # Now - Current Focus
 
 ## Active Task
-Debugging OPL3 audio - instruments may be incorrectly mapped to MIDI channels.
+Cleaned up MidiPlayer.ts - removed dead code from audio debugging attempts
 
-## Instrument Mapper Tool
-Added interactive UI to debug channel/instrument assignments:
-- Checkbox to mute/unmute channels
-- Dropdown to swap instruments between channels
-- Octave offset control (-4 to +4)
+## Recent Change
+Simplified MidiPlayer.ts from 978 lines to ~485 lines:
+- Removed `analyzeMidi()` (120 line MIDI parser that didn't fix the issue)
+- Removed `calculateOctaveWrapOffset()` workaround
+- Simplified `loadAndInjectInstruments()` to direct slot→channel mapping
+- Extracted `loadInsFile()` helper for cleaner code
+- Kept all debug interface: channel muting, instrument swapping, octave offset, note testing
 
-## Recent Fixes
-- Fixed INS file parsing offsets (modulator @ byte 2, carrier @ byte 28, wave select @ bytes 74/76)
-- Fixed InsToOpl3 field names (`percussionKey` not `percussionNote`, `rhythmMode` not booleans)
-- Fixed instrument injection to use MIDI program numbers
+## Debug Interface (preserved)
+- `muteChannel()` / `unmuteChannel()` / `toggleMuteChannel()`
+- `getChannels()` / `onChannelChange()`
+- `setChannelInstrument()` / `getAvailableInstruments()`
+- `setChannelOctaveOffset()`
+- `noteOn()` / `noteOff()` / `allNotesOff()`
 
 ## Quick Reference
-- Dev server: `pnpm dev`
+- Dev server: `pnpm dev` (running at http://localhost:3001/)
 - TypeScript check: `npx tsc --noEmit`
