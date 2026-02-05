@@ -1,0 +1,104 @@
+{
+  "melodic": [
+    {
+      "program": 0,
+      "name": "acguit1a"
+    },
+    {
+      "program": 1,
+      "name": "acousti"
+    },
+    {
+      "program": 2,
+      "name": "baselc01"
+    },
+    {
+      "program": 3,
+      "name": "brass02"
+    },
+    {
+      "program": 4,
+      "name": "brass3"
+    },
+    {
+      "program": 5,
+      "name": "brss1a"
+    },
+    {
+      "program": 6,
+      "name": "drmlog01"
+    },
+    {
+      "program": 7,
+      "name": "elbass8"
+    },
+    {
+      "program": 8,
+      "name": "elpiano1"
+    },
+    {
+      "program": 9,
+      "name": "flute1"
+    },
+    {
+      "program": 10,
+      "name": "flute1a"
+    },
+    {
+      "program": 11,
+      "name": "guit-sus"
+    },
+    {
+      "program": 12,
+      "name": "harp"
+    },
+    {
+      "program": 13,
+      "name": "keybrd9"
+    },
+    {
+      "program": 14,
+      "name": "kjm"
+    },
+    {
+      "program": 15,
+      "name": "marimba2"
+    },
+    {
+      "program": 16,
+      "name": "orgpedal"
+    },
+    {
+      "program": 17,
+      "name": "piano3"
+    },
+    {
+      "program": 18,
+      "name": "pianobel"
+    },
+    {
+      "program": 19,
+      "name": "sdrsyn01"
+    },
+    {
+      "program": 20,
+      "name": "string2"
+    },
+    {
+      "program": 21,
+      "name": "synth1"
+    }
+  ],
+  "percussion": [
+    {
+      "program": 0,
+      "name": "hartbeat",
+      "channel": 6
+    },
+    {
+      "program": 1,
+      "name": "hihat4",
+      "channel": 10
+    }
+  ]
+}

@@ -5,11 +5,24 @@
  */
 
 #include <math.h>
+#include <map>
+#include <set>
 #include "cutscene.h"
 #include "resource.h"
+#include "screenshot.h"
 #include "systemstub.h"
 #include "util.h"
 #include "video.h"
+
+extern bool g_dumpCutscenes;
+extern const char *g_dumpCutscenesPath;
+extern int g_dumpFrameCounter;
+extern const char *g_dumpCurrentCutscene;
+
+static std::set<uint32_t> g_visitedJumpTargets;
+static uint32_t g_lastFrameChecksum = 0;
+static int g_duplicateFrameCount = 0;
+static const int kMaxDuplicateFrames = 10;
 
 static void scalePoints(Point *pt, int count, int scale, int16_t *rx = 0, int16_t *ry = 0) {
 	if (scale != 1) {
@@ -81,11 +94,47 @@ void Cutscene::updatePalette() {
 }
 
 void Cutscene::updateScreen() {
-	sync(_frameDelay - 1);
+	if (!g_dumpCutscenes) {
+		sync(_frameDelay - 1);
+	}
 	updatePalette();
 	SWAP(_frontPage, _backPage);
 	_stub->copyRect(0, 0, _vid->_w, _vid->_h, _frontPage, _vid->_w);
 	_stub->updateScreen(0);
+
+	if (g_dumpCutscenes && g_dumpCutscenesPath && g_dumpCurrentCutscene) {
+		uint32_t checksum = 0;
+		const int size = _vid->_w * _vid->_h;
+		for (int i = 0; i < size; i += 16) {
+			checksum = checksum * 31 + _frontPage[i];
+		}
+
+		if (checksum == g_lastFrameChecksum) {
+			++g_duplicateFrameCount;
+			if (g_duplicateFrameCount >= kMaxDuplicateFrames) {
+				_interrupted = true;
+				return;
+			}
+		} else {
+			g_duplicateFrameCount = 0;
+			g_lastFrameChecksum = checksum;
+		}
+
+		uint8_t rgbPal[256 * 3];
+		for (int i = 0; i < 256; ++i) {
+			Color c;
+			_stub->getPaletteEntry(i, &c);
+			rgbPal[i * 3 + 0] = c.r;
+			rgbPal[i * 3 + 1] = c.g;
+			rgbPal[i * 3 + 2] = c.b;
+		}
+
+		char filename[512];
+		snprintf(filename, sizeof(filename), "%s/%s/frame%03d.png",
+			g_dumpCutscenesPath, g_dumpCurrentCutscene, g_dumpFrameCounter);
+		savePNG(filename, _frontPage, rgbPal, _vid->_w, _vid->_h);
+		++g_dumpFrameCounter;
+	}
 }
 
 #if 1
@@ -1036,22 +1085,26 @@ void Cutscene::op_handleKeys() {
 			return;
 		}
 		bool b = true;
-		switch (key_mask) {
-		case 1:
-			b = (_stub->_pi.dirMask & PlayerInput::DIR_UP) != 0;
-			break;
-		case 2:
-			b = (_stub->_pi.dirMask & PlayerInput::DIR_DOWN) != 0;
-			break;
-		case 4:
-			b = (_stub->_pi.dirMask & PlayerInput::DIR_LEFT) != 0;
-			break;
-		case 8:
-			b = (_stub->_pi.dirMask & PlayerInput::DIR_RIGHT) != 0;
-			break;
-		case 0x80:
-			b = _stub->_pi.space || _stub->_pi.enter || _stub->_pi.shift;
-			break;
+		if (g_dumpCutscenes) {
+			b = true;
+		} else {
+			switch (key_mask) {
+			case 1:
+				b = (_stub->_pi.dirMask & PlayerInput::DIR_UP) != 0;
+				break;
+			case 2:
+				b = (_stub->_pi.dirMask & PlayerInput::DIR_DOWN) != 0;
+				break;
+			case 4:
+				b = (_stub->_pi.dirMask & PlayerInput::DIR_LEFT) != 0;
+				break;
+			case 8:
+				b = (_stub->_pi.dirMask & PlayerInput::DIR_RIGHT) != 0;
+				break;
+			case 0x80:
+				b = _stub->_pi.space || _stub->_pi.enter || _stub->_pi.shift;
+				break;
+			}
 		}
 		if (b) {
 			break;
@@ -1068,6 +1121,17 @@ void Cutscene::op_handleKeys() {
 		_stop = true;
 		return;
 	}
+
+	if (g_dumpCutscenes) {
+		uint32_t jumpTarget = n + _baseOffset;
+		if (g_visitedJumpTargets.find(jumpTarget) != g_visitedJumpTargets.end()) {
+			debug(DBG_CUT, "Cutscene::op_handleKeys detected loop to offset %d, stopping", jumpTarget);
+			_stop = true;
+			return;
+		}
+		g_visitedJumpTargets.insert(jumpTarget);
+	}
+
 	_cmdPtr = _cmdStartPtr = getCommandData() + n + _baseOffset;
 }
 
@@ -1121,7 +1185,19 @@ void Cutscene::mainLoop(uint16_t num) {
 	_drawMemoSetShapes = (_id == kCineMemo && g_options.restore_memo_cutscene);
 	_memoSetOffset = 0;
 
+	std::map<const uint8_t *, int> visitedPositions;
+	const int kMaxVisitsBeforeLoop = 3;
+
 	while (!_stub->_pi.quit && !_interrupted && !_stop) {
+		if (g_dumpCutscenes) {
+			int &visits = visitedPositions[_cmdPtr];
+			++visits;
+			if (visits > kMaxVisitsBeforeLoop) {
+				debug(DBG_CUT, "Cutscene::mainLoop detected loop at cmd position (visited %d times), stopping", visits);
+				break;
+			}
+		}
+
 		uint8_t op = fetchNextCmdByte();
 		debug(DBG_CUT, "Cutscene::play() opcode = 0x%X (%d)", op, (op >> 2));
 		if (op & 0x80) {
@@ -1129,6 +1205,10 @@ void Cutscene::mainLoop(uint16_t num) {
 		}
 		op >>= 2;
 		if (op >= NUM_OPCODES) {
+			if (g_dumpCutscenes) {
+				warning("Invalid cutscene opcode = 0x%02X, stopping sequence", op);
+				break;
+			}
 			error("Invalid cutscene opcode = 0x%02X", op);
 		}
 		(this->*_opcodeTable[op])();
@@ -1225,6 +1305,12 @@ void Cutscene::prepare() {
 	const int sx = x * _vid->_layerScale;
 	const int sy = y * _vid->_layerScale;
 	_gfx.setClippingRect(sx, sy, sw, sh);
+
+	if (g_dumpCutscenes) {
+		g_visitedJumpTargets.clear();
+		g_lastFrameChecksum = 0;
+		g_duplicateFrameCount = 0;
+	}
 }
 
 void Cutscene::playCredits() {

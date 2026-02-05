@@ -1,176 +1,80 @@
 # Working Memory - Flashback Cutscene Project
 
 ## Current Focus
-Cutscene viewer with Three.js - loads directly from binary CMD/POL files, rendering verified working
+Cutscene viewer with Canvas 2D + OPL3 audio playback
 
 ## Game Data Version
-**PC DOS** - Current DATA directory contains PC DOS version files (not Amiga)
-- Separate CMD/POL files (not packed in ABA archive)
+**PC DOS** - DATA directory contains PC DOS version files
+- Separate CMD/POL files (cutscene graphics)
 - MIDI music (.MID files)
-- Same binary format as Amiga but different palette encoding
+- INS files (80-byte AdLib instrument patches)
+- PRF files (instrument configuration per channel)
 
 ## Architecture
 
-### Data Flow (Current - Direct Binary Loading)
+### Graphics Pipeline
 ```
-DATA/*.CMD + DATA/*.POL (PC DOS binary)
-    ↓ CutsceneLoader.loadAsync(name)
-    ↓ fetch as ArrayBuffer
-    ↓ CutsceneParser.parseCMD() + parsePOL()
-Cutscene object (shapes, palettes, script)
-    ↓ CutscenePlayer.loadCutscene()
-OpcodeInterpreter + ShapeRenderer
-    ↓ Three.js
-WebGL canvas
+DATA/*.CMD + DATA/*.POL
+    ↓ CutsceneLoader → CutsceneParser
+Cutscene { shapes, palettes, script }
+    ↓ CutscenePlayer
+OpcodeInterpreter + Canvas2DRenderer + Graphics
+    ↓ ImageData buffer
+2D Canvas (256x224 native, CSS scaled)
 ```
 
-### Key Classes
-
-**CutsceneLoader** - Binary file loader (Three.js pattern)
-- Extends `Loader<Cutscene>` from Three.js
-- Fetches CMD + POL files in parallel
-- Uses CutsceneParser for binary parsing
-
-**CutsceneParser** - Binary parsing module
-- `parseCMD(buffer)` → Script object
-- `parsePOL(buffer)` → { shapes, palettes }
-- BinaryReader helper with DataView operations
-
-**CutscenePlayer** - Main orchestrator
-- Manages Three.js scene, camera, renderer
-- Coordinates ShapeRenderer and OpcodeInterpreter
-- Handles playback (play/pause/step)
-
-**OpcodeInterpreter** - Command execution
-- Executes CMD opcodes frame by frame
-- Tracks state (palette buffers, clearScreen)
-- Calls ShapeRenderer for draw operations
-
-**ShapeRenderer** - Primitive rendering
-- Pre-renders shapes as Three.js groups
-- Clones and positions shapes for each draw call
-- Handles palette color lookups
-
-### Coordinate System
-- Screen: 256x224
-- Viewport: 240x128 at offset (8, 50)
-- Y-axis: Down (flipped via ortho camera)
-
-## Critical Code Patterns
-
-### Polygon Vertex Loop (FIXED)
-```python
-# CORRECT - loop numVertices times for deltas
-for _ in range(num_vertices):
-    dx = self._read_int8(pos)
-    dy = self._read_int8(pos + 1)
+### Audio Pipeline
+```
+PRF file (channel→instrument mapping)
+    ↓ PrfParser
+INS files (AdLib patches)
+    ↓ InsParser → InsToOpl3
+libadlmidi-js (Nuked OPL3)
+    ↓ setInstrument() per MIDI channel
+MIDI file playback
 ```
 
-### Callback Registration Pattern
-```typescript
-// Store callback before interpreter exists
-private stateChangeCallback: ((state) => void) | null = null
+## Key Source Files
 
-onStateChange(cb) {
-  this.stateChangeCallback = cb
-  this.interpreter?.setOnFrameChange(cb)  // Set if exists
-}
+| Path | Purpose |
+|------|---------|
+| `CutscenePlayer.ts` | Main orchestrator (graphics + audio) |
+| `MidiPlayer.ts` | OPL3 playback with custom instruments |
+| `InsParser.ts` | Parse 80-byte INS files |
+| `InsToOpl3.ts` | Convert INS → libadlmidi-js format |
+| `PrfParser.ts` | Parse PRF channel config |
+| `audioMapping.ts` | Cutscene → PRF filename map |
 
-loadCutscene(data) {
-  this.interpreter = new OpcodeInterpreter(...)
-  if (this.stateChangeCallback) {
-    this.interpreter.setOnFrameChange(this.stateChangeCallback)
-  }
+## INS File Format (80 bytes)
+```
+Byte 0:     mode (0=melodic, 1=percussion)
+Byte 1:     channel number
+Bytes 2-27: modulator operator (13 uint16 LE fields)
+Bytes 28-53: carrier operator (13 uint16 LE fields)
+Bytes 54-73: padding
+Byte 74:    modulator wave select (0-7)
+Byte 76:    carrier wave select (0-7)
+```
+
+## PRF Data Structure
+- `instruments[16]` - INS filename per slot
+- `adlibNotes[16]` - note offset per slot
+- `adlibVelocities[16]` - velocity offset per slot
+- `adlibPrograms[16]` - MIDI program mapping
+- `hwChannelNum[16]` - hardware channel assignment
+
+## Known Issues
+
+### Audio
+- Instruments may be shuffled/misassigned to MIDI channels
+- REminiscence maps track→slot directly, libadlmidi uses program changes
+
+### Graphics
+- 0.17% pixel difference vs reference (edge rounding)
+
+## Vite Configuration
+```ts
+optimizeDeps: {
+  exclude: ['libadlmidi-js', 'libadlmidi-js/nuked']
 }
 ```
-
-### Frame Clear Logic
-```typescript
-// Clear happens on refreshScreen command, not automatically
-case 'refreshScreen':
-  if ((cmd.clearMode ?? 0) !== 0) {
-    this.renderer.clearDrawnShapes()
-  }
-```
-
-### Playback Timing & Graphics Persistence
-
-**NOT a fixed frame rate system** - timing varies by cutscene:
-- Base clock: 60 Hz
-- Default _frameDelay: 5 → ~12 FPS
-- DEBUT: 7 → ~8.5 FPS
-- CHUTE: 6 → ~10 FPS
-
-**Graphics persist between frames** - accumulate-then-display model:
-1. Draw commands accumulate on back buffer
-2. `markCurPos` swaps buffers and displays
-3. `waitForSync` can hold frame for arbitrary time
-4. Only `refreshScreen` with clearMode != 0 clears
-
-Static scenes: draw once, hold with `waitForSync`
-Animation: redraw changed shapes each frame
-
-## Text Rendering System
-
-Text in cutscenes uses a **bitmap font system**, NOT polygons:
-- 8×8 pixel glyphs from `.FNT` files (FB_TXT.FNT for DOS)
-- Characters stored starting from ASCII 32 (space)
-- DOS format: 4-bit packed pixels (8×4 bytes per char)
-- Separate rendering path from polygon shapes
-- Drawn on top of vector graphics to same frame buffer
-
-**Cutscene text opcodes:**
-- `op_drawCaptionText` (opcode 6) - subtitle-style text at bottom of screen
-- `op_drawTextAtPos` (opcode 13) - text at arbitrary x,y position
-
-**String data:** Loaded from `.TBN` files or CINE text resources
-
-## Data Format Reference
-
-### POL Primitive Types
-| numVerts byte | Type | Data after |
-|---------------|------|------------|
-| 0x00 | Point | int16 x, int16 y |
-| 0x80+ | Ellipse | int16 cx, cy, rx, ry |
-| 1-127 | Polygon | int16 x,y + N delta pairs |
-
-### CMD Opcodes (>>2)
-| Op | Name | Args |
-|----|------|------|
-| 0 | markCurPos | - |
-| 1 | refreshScreen | byte clearMode |
-| 2 | drawShape | word shapeOffset, [word x, word y] |
-| 3 | setPalette | byte palNum, byte bufNum |
-| ... | ... | ... |
-
-## Known Issues / TODO
-
-### Rendering
-- [ ] Verify concave polygon triangulation
-- [ ] Compare against REminiscence screenshots
-- [x] Test multiple cutscenes (INTRO1, CHUTE verified)
-
-### Data
-- [ ] Validate zoom values (seem like uint16 overflow?)
-- [ ] Check palette buffer switching logic
-- [ ] Implement text rendering (bitmap font from FNT, see Text Rendering System section)
-
-### Player
-- [x] Add cutscene selector dropdown
-- [x] Direct binary loading (no JSON extraction)
-- [ ] Add speed control
-- [ ] Add frame scrubber
-
-## Source Files
-
-| Path | Contents |
-|------|----------|
-| `src/CutsceneLoader.ts` | Three.js-style binary loader |
-| `src/CutsceneParser.ts` | CMD/POL binary parsing |
-| `src/CutscenePlayer.ts` | Main orchestrator |
-| `src/OpcodeInterpreter.ts` | Command execution |
-| `src/ShapeRenderer.ts` | Primitive rendering |
-| `src/types.ts` | TypeScript interfaces |
-| `tools/` | Python extraction scripts (legacy) |
-| `REminiscence/` | Original C++ source (reference) |
-| `.cursor/rules/cutscene-system.mdc` | Detailed cutscene system documentation |

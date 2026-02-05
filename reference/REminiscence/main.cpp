@@ -15,6 +15,11 @@
 #include "systemstub.h"
 #include "util.h"
 
+extern bool g_dumpCutscenes;
+extern const char *g_dumpCutscenesPath;
+extern int g_dumpFrameCounter;
+extern const char *g_dumpCurrentCutscene;
+
 static const char *USAGE =
 	"REminiscence - Flashback Interpreter\n"
 	"Usage: %s [OPTIONS]...\n"
@@ -27,6 +32,7 @@ static const char *USAGE =
 	"  --language=LANG   Language (fr,en,de,sp,it,jp)\n"
 	"  --autosave        Save game state automatically\n"
 	"  --mididriver=MIDI Driver (adlib, mt32)\n"
+	"  --dump-cutscenes=PATH  Dump all cutscene frames to PNG files\n"
 ;
 
 static const Features kFeaturesAmiga     = { false /* extended_intro */, true  /* bigendian */, 1, true  /* copy_protection */ };
@@ -97,6 +103,11 @@ static Language detectLanguage(FileSystem *fs) {
 
 Options g_options;
 const char *g_caption = "REminiscence";
+
+bool g_dumpCutscenes = false;
+const char *g_dumpCutscenesPath = 0;
+int g_dumpFrameCounter = 0;
+const char *g_dumpCurrentCutscene = 0;
 
 static void initOptions() {
 	// defaults
@@ -242,6 +253,7 @@ int main(int argc, char *argv[]) {
 			{ "mididriver", required_argument, 0, 10 },
 			{ "debug",      required_argument, 0, 11 },
 			{ "maximized",  no_argument,       0, 12 },
+			{ "dump-cutscenes", required_argument, 0, 13 },
 			{ 0, 0, 0, 0 }
 		};
 		int index;
@@ -326,6 +338,10 @@ int main(int argc, char *argv[]) {
 		case 12:
 			maximizedWindow = true;
 			break;
+		case 13:
+			g_dumpCutscenes = true;
+			g_dumpCutscenesPath = strdup(optarg);
+			break;
 		default:
 			printf(USAGE, argv[0]);
 			return 0;
@@ -343,7 +359,13 @@ int main(int argc, char *argv[]) {
 	SystemStub *stub = SystemStub_SDL_create();
 	Game *g = new Game(stub, &fs, savePath, levelNum, (ResourceType)version, language, widescreen, autoSave, midiDriver, cheats);
 	stub->init(g_caption, g->_vid._w, g->_vid._h, fullscreen, widescreen, maximizedWindow, &scalerParameters);
-	g->run();
+
+	if (g_dumpCutscenes) {
+		g->dumpAllCutscenes();
+	} else {
+		g->run();
+	}
+
 	delete g;
 	stub->destroy();
 	delete stub;

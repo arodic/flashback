@@ -1,22 +1,19 @@
 # Now - Current Focus
 
-## Last Action
-Updated cutscene extraction tool to support PC DOS data format:
-- Added `--dir` option to read separate CMD/POL files directly
-- Changed output option to `-o/--output` instead of positional arg
-- Extracted all 29 cutscenes from new DATA directory
-- Updated index.html with all available cutscenes
+## Active Task
+Debugging OPL3 audio - instruments may be incorrectly mapped to MIDI channels.
 
-## Data Files (PC DOS Version)
-DATA directory contains PC DOS game files:
-- Separate .CMD and .POL files (uncompressed, not packed in ABA archive like Amiga)
-- MIDI music files (.MID) - PC DOS format
-- PRF files for some music
-- 29 total cutscenes
-- Binary format is same as Amiga, just different packaging
+## Instrument Mapper Tool
+Added interactive UI to debug channel/instrument assignments:
+- Checkbox to mute/unmute channels
+- Dropdown to swap instruments between channels
+- Octave offset control (-4 to +4)
+
+## Recent Fixes
+- Fixed INS file parsing offsets (modulator @ byte 2, carrier @ byte 28, wave select @ bytes 74/76)
+- Fixed InsToOpl3 field names (`percussionKey` not `percussionNote`, `rhythmMode` not booleans)
+- Fixed instrument injection to use MIDI program numbers
 
 ## Quick Reference
-- Extract from directory (PC DOS): `python tools/extract-cutscenes.py --dir DATA/ -o public/data`
-- Extract from archive (Amiga): `python tools/extract-cutscenes.py DEMO_UK.ABA -o public/data`
-- List cutscenes: `python tools/extract-cutscenes.py --dir DATA/ --list`
 - Dev server: `pnpm dev`
+- TypeScript check: `npx tsc --noEmit`

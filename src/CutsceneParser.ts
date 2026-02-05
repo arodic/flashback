@@ -251,7 +251,7 @@ function parseCommands(reader: BinaryReader): Command[] {
           cmd.y = 0
         }
         
-        cmd.zoom = reader.readBEUint16()
+        cmd.zoom = reader.readBEInt16()  // Signed - negative = shrink, positive = grow
         cmd.originX = reader.readUint8()
         cmd.originY = reader.readUint8()
         break
@@ -270,7 +270,7 @@ function parseCommands(reader: BinaryReader): Command[] {
         }
         
         if (shapeWord & 0x4000) {
-          cmd.zoom = reader.readBEUint16()
+          cmd.zoom = reader.readBEInt16()  // Signed
         } else {
           cmd.zoom = 0
         }

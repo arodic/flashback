@@ -112,6 +112,7 @@ struct Game {
 	Game(SystemStub *, FileSystem *, const char *savePath, int level, ResourceType ver, Language lang, WidescreenMode widescreenMode, bool autoSave, int midiDriver, uint32_t cheats);
 
 	void run();
+	void dumpAllCutscenes();
 	void displayTitleScreenAmiga();
 	void resetGameState();
 	void mainLoop();

@@ -23,8 +23,6 @@
       }
       
       #canvas-container {
-        border: 2px solid #00d9ff;
-        box-shadow: 0 0 20px rgba(0, 217, 255, 0.3);
         background: #000;
       }
       
@@ -73,27 +71,6 @@
         outline: none;
       }
       
-      .checkbox-label {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        color: #00d9ff;
-        cursor: pointer;
-        padding: 8px 12px;
-        border: 1px solid #00d9ff;
-        background: #16213e;
-      }
-      
-      .checkbox-label:hover {
-        background: #1e2b4a;
-      }
-      
-      .checkbox-label input {
-        accent-color: #00d9ff;
-        width: 16px;
-        height: 16px;
-        cursor: pointer;
-      }
       
       .info {
         margin-top: 20px;
@@ -104,6 +81,95 @@
       #frame-info {
         color: #00d9ff;
       }
+      
+      #audio-info {
+        color: #ff9f00;
+        margin-left: 20px;
+      }
+      
+      #audio-info.no-audio {
+        color: #666;
+      }
+      
+      #audio-info.midi {
+        color: #00ff88;
+      }
+      
+      /* Instrument Mapper */
+      #instrument-mapper {
+        margin-top: 20px;
+        padding: 15px;
+        background: #16213e;
+        border: 1px solid #00d9ff;
+        max-width: 900px;
+        width: 100%;
+      }
+      
+      #instrument-mapper h3 {
+        margin: 0 0 10px 0;
+        color: #00d9ff;
+        font-size: 0.9rem;
+      }
+      
+      .mapper-header {
+        display: grid;
+        grid-template-columns: 30px 40px 150px 80px;
+        gap: 8px;
+        padding: 4px 8px;
+        color: #666;
+        font-size: 0.7rem;
+        border-bottom: 1px solid #333;
+        margin-bottom: 4px;
+      }
+      
+      .channel-row {
+        display: grid;
+        grid-template-columns: 30px 40px 150px 80px;
+        gap: 8px;
+        padding: 4px 8px;
+        align-items: center;
+        background: #1a1a2e;
+        margin-bottom: 2px;
+        font-size: 0.8rem;
+      }
+      
+      .channel-row.muted {
+        opacity: 0.5;
+      }
+      
+      .channel-row input[type="checkbox"] {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+      }
+      
+      .channel-row .ch-num {
+        color: #00d9ff;
+        font-weight: bold;
+      }
+      
+      .channel-row select {
+        background: #16213e;
+        color: #00ff88;
+        border: 1px solid #333;
+        padding: 2px 4px;
+        font-family: inherit;
+        font-size: 0.75rem;
+        cursor: pointer;
+        width: 100%;
+      }
+      
+      .channel-row input[type="number"] {
+        background: #16213e;
+        color: #ff9f00;
+        border: 1px solid #333;
+        padding: 2px 4px;
+        font-family: inherit;
+        font-size: 0.8rem;
+        width: 60px;
+        text-align: center;
+      }
+      
     </style>
   </head>
   <body>
@@ -143,13 +209,25 @@
       <button id="btn-prev">|◀</button>
       <button id="btn-play">▶ Play</button>
       <button id="btn-next">▶|</button>
-      <label class="checkbox-label">
-        <input type="checkbox" id="native-res"> Pixelated
-      </label>
     </div>
     <div class="info">
       <span id="frame-info">Frame: 0 / 0</span>
+      <span id="audio-info" class="no-audio">No audio</span>
     </div>
+    <div id="instrument-mapper">
+      <h3>Instrument Mapper</h3>
+      <div class="mapper-header">
+        <span>On</span>
+        <span>Ch</span>
+        <span>Instrument</span>
+        <span>Octave</span>
+      </div>
+      <div id="channel-rows">
+        <!-- Populated dynamically -->
+      </div>
+    </div>
+    
+    
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

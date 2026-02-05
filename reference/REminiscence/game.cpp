@@ -5,6 +5,8 @@
  */
 
 #include <time.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 #include "file.h"
 #include "fs.h"
 #include "game.h"
@@ -2325,6 +2327,174 @@ bool Game::loadStateRewind() {
 	}
 	// info("Rewind state (index %d, count %d, size %d)", ptr, _rewindLen, f.size());
 	return !f.ioErr();
+}
+
+extern bool g_dumpCutscenes;
+extern const char *g_dumpCutscenesPath;
+extern int g_dumpFrameCounter;
+extern const char *g_dumpCurrentCutscene;
+
+void Game::dumpAllCutscenes() {
+	_res.init();
+	_res.load_TEXT();
+
+	switch (_res._type) {
+	case kResourceTypeAmiga:
+		_res.load("FONT8", Resource::OT_FNT, "SPR");
+		if (_res._isDemo) {
+			_cut._patchedOffsetsTable = Cutscene::_amigaDemoOffsetsTable;
+		}
+		break;
+	case kResourceTypeDOS:
+		_res.load("FB_TXT", Resource::OT_FNT);
+		if (_fs->exists("logosssi.cmd")) {
+			_cut._patchedOffsetsTable = Cutscene::_ssiOffsetsTable;
+		}
+		break;
+	case kResourceTypeMac:
+		_res.MAC_loadClutData();
+		_res.MAC_loadFontData();
+		break;
+	case kResourceTypePC98:
+		break;
+	case kResourceTypeSega:
+		_res.load("FONT8", Resource::OT_FNT);
+		break;
+	}
+
+	_mix.init();
+	_mix._mod._isAmiga = _res.isAmiga();
+
+	static const char *cutsceneNames[] = {
+		"DEBUT", "OBJET", "CARTE", "GEN", "CHUTE", "CODE", "DESINTEG", "INTRO1",
+		"STREM", "HOLOSEQ", "CARTEID", "PONT", "ASC", "MAP", "METRO", "MISSIONS",
+		"GENMIS", "MEMO", "TAXI", "ACCROCHE", "VOYAGE", "TELEPORT", "LIFT", "ESPIONS",
+		"LOG", "FIN", "GENEXP", "LOGOS", "OVER", "SCORE", "INTRO2", "SERRURE",
+		"HOLOCUBE", "CHUTE2", "LOGOSSSI", 0
+	};
+
+	info("Dumping cutscenes to: %s", g_dumpCutscenesPath);
+
+	for (int i = 0; cutsceneNames[i]; ++i) {
+		const char *name = cutsceneNames[i];
+
+		g_dumpCurrentCutscene = name;
+		g_dumpFrameCounter = 0;
+
+		char dirPath[512];
+		snprintf(dirPath, sizeof(dirPath), "%s/%s", g_dumpCutscenesPath, name);
+
+		struct stat st;
+		if (stat(dirPath, &st) != 0) {
+#ifdef _WIN32
+			mkdir(dirPath);
+#else
+			mkdir(dirPath, 0755);
+#endif
+		}
+
+		info("Dumping cutscene: %s", name);
+
+		char cmdName[64], polName[64], cmpName[64];
+		snprintf(cmdName, sizeof(cmdName), "%s.CMD", name);
+		snprintf(polName, sizeof(polName), "%s.POL", name);
+		snprintf(cmpName, sizeof(cmpName), "%s.CMP", name);
+
+		bool filesExist = false;
+		switch (_res._type) {
+		case kResourceTypeAmiga:
+			filesExist = _fs->exists(cmpName);
+			break;
+		case kResourceTypeDOS:
+		case kResourceTypePC98:
+		case kResourceTypeSega:
+			filesExist = _fs->exists(cmdName) && _fs->exists(polName);
+			break;
+		case kResourceTypeMac:
+			filesExist = true;
+			break;
+		}
+
+		if (!filesExist) {
+			info("  Skipping %s (files not found)", name);
+			continue;
+		}
+
+		bool loaded = false;
+		switch (_res._type) {
+		case kResourceTypeAmiga:
+			_res.load(name, Resource::OT_CMP);
+			loaded = _res._cmd && _res._pol;
+			break;
+		case kResourceTypeDOS:
+		case kResourceTypePC98:
+		case kResourceTypeSega:
+			_res.load(name, Resource::OT_CMD);
+			_res.load(name, Resource::OT_POL);
+			loaded = _res._cmd && _res._pol;
+			break;
+		case kResourceTypeMac:
+			_res.MAC_loadCutscene(name);
+			loaded = _res._cmd && _res._pol;
+			break;
+		}
+
+		if (!loaded) {
+			info("  Skipping %s (failed to load)", name);
+			continue;
+		}
+
+		_res.load_CINE();
+
+		_cut._id = 0;
+		_cut.prepare();
+
+		const uint8_t *cmdPtr = _cut.getCommandData();
+		const int count = READ_BE_UINT16(cmdPtr);
+		uint16_t baseOffset = (count + 1) * 2;
+
+		for (int seq = 0; seq <= count && !_stub->_pi.quit; ++seq) {
+			int offset = 0;
+			if (_res.isMac()) {
+				if (seq >= count) break;
+				offset = READ_BE_UINT16(cmdPtr + 2 + seq * 2);
+				if (offset < baseOffset) continue;
+			} else {
+				if (seq != 0) {
+					offset = READ_BE_UINT16(cmdPtr + 2 + seq * 2);
+				} else if (count != 0) {
+					int startOffset = READ_BE_UINT16(cmdPtr + 2);
+					if (startOffset != 0) continue;
+				}
+			}
+
+			info("  Playing sequence %d/%d", seq, count);
+			_cut._interrupted = false;
+			_cut._stop = false;
+			_cut.mainLoop(seq);
+
+			_stub->processEvents();
+		}
+
+		switch (_res._type) {
+		case kResourceTypeAmiga:
+			_res.unload(Resource::OT_CMP);
+			break;
+		case kResourceTypeDOS:
+		case kResourceTypePC98:
+		case kResourceTypeSega:
+			_res.unload(Resource::OT_CMD);
+			_res.unload(Resource::OT_POL);
+			break;
+		case kResourceTypeMac:
+			_res.MAC_unloadCutscene();
+			break;
+		}
+
+		info("  Dumped %d frames", g_dumpFrameCounter);
+	}
+
+	info("Done dumping cutscenes");
 }
 
 void AnimBuffers::addState(uint8_t stateNum, int16_t x, int16_t y, const uint8_t *dataPtr, LivePGE *pge, uint8_t w, uint8_t h) {

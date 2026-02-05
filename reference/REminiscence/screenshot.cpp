@@ -3,6 +3,9 @@
 #include "file.h"
 #include "util.h"
 
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
+
 static const uint16_t TAG_BM = 0x4D42;
 
 void saveBMP(const char *filename, const uint8_t *bits, const uint8_t *pal, int w, int h) {
@@ -59,4 +62,29 @@ void saveBMP(const char *filename, const uint8_t *bits, const uint8_t *pal, int 
 			}
 		}
 	}
+}
+
+void savePNG(const char *filename, const uint8_t *bits, const uint8_t *pal, int w, int h) {
+	uint8_t *rgb = (uint8_t *)malloc(w * h * 3);
+	if (!rgb) {
+		warning("Failed to allocate memory for PNG");
+		return;
+	}
+
+	for (int y = 0; y < h; ++y) {
+		for (int x = 0; x < w; ++x) {
+			const int srcIndex = y * w + x;
+			const int dstIndex = srcIndex * 3;
+			const uint8_t colorIndex = bits[srcIndex];
+			rgb[dstIndex + 0] = pal[colorIndex * 3 + 0];
+			rgb[dstIndex + 1] = pal[colorIndex * 3 + 1];
+			rgb[dstIndex + 2] = pal[colorIndex * 3 + 2];
+		}
+	}
+
+	if (!stbi_write_png(filename, w, h, 3, rgb, w * 3)) {
+		warning("Failed to write PNG '%s'", filename);
+	}
+
+	free(rgb);
 }

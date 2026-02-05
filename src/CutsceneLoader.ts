@@ -1,20 +1,14 @@
 /**
- * CutsceneLoader - Three.js-style loader for Flashback cutscenes
+ * CutsceneLoader - Loads Flashback cutscene data
  * 
  * Loads CMD and POL binary files and returns a Cutscene object.
- * Follows the Three.js Loader pattern for consistency with the ecosystem.
  */
 
-import { Loader, LoadingManager } from 'three'
 import type { Cutscene } from './types'
 import { parseCMD, parsePOL } from './CutsceneParser'
 
-export class CutsceneLoader extends Loader<Cutscene> {
+export class CutsceneLoader {
   private basePath: string = ''
-
-  constructor(manager?: LoadingManager) {
-    super(manager)
-  }
 
   /**
    * Set the base path for loading cutscene files.
@@ -59,7 +53,6 @@ export class CutsceneLoader extends Loader<Cutscene> {
           } else {
             console.error('CutsceneLoader: Failed to parse cutscene:', e)
           }
-          this.manager.itemError(cmdUrl)
         }
       }
     }
@@ -78,10 +71,7 @@ export class CutsceneLoader extends Loader<Cutscene> {
     }
 
     // Load CMD file
-    fetch(cmdUrl, {
-      credentials: this.withCredentials ? 'include' : 'same-origin',
-      headers: this.requestHeader
-    })
+    fetch(cmdUrl)
       .then(response => {
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`)
@@ -99,14 +89,10 @@ export class CutsceneLoader extends Loader<Cutscene> {
         } else {
           console.error(`CutsceneLoader: Failed to load ${cmdUrl}:`, e)
         }
-        this.manager.itemError(cmdUrl)
       })
 
     // Load POL file
-    fetch(polUrl, {
-      credentials: this.withCredentials ? 'include' : 'same-origin',
-      headers: this.requestHeader
-    })
+    fetch(polUrl)
       .then(response => {
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`)
@@ -124,12 +110,7 @@ export class CutsceneLoader extends Loader<Cutscene> {
         } else {
           console.error(`CutsceneLoader: Failed to load ${polUrl}:`, e)
         }
-        this.manager.itemError(polUrl)
       })
-
-    // Register items with manager
-    this.manager.itemStart(cmdUrl)
-    this.manager.itemStart(polUrl)
   }
 
   /**

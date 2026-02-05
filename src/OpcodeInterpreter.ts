@@ -2,11 +2,11 @@
  * OpcodeInterpreter - Executes cutscene commands
  * 
  * Interprets the CMD bytecode commands and coordinates with
- * the ShapeRenderer to produce the visual output.
+ * the Canvas2DRenderer to produce the visual output.
  */
 
 import type { Cutscene, Command, Color, Frame } from './types'
-import { ShapeRenderer } from './ShapeRenderer'
+import { Canvas2DRenderer } from './Canvas2DRenderer'
 
 export interface InterpreterState {
   currentSubscene: number
@@ -19,11 +19,11 @@ export interface InterpreterState {
 
 export class OpcodeInterpreter {
   private cutscene: Cutscene
-  private renderer: ShapeRenderer
+  private renderer: Canvas2DRenderer
   private state: InterpreterState
   private onFrameChange?: (state: InterpreterState) => void
   
-  constructor(cutscene: Cutscene, renderer: ShapeRenderer) {
+  constructor(cutscene: Cutscene, renderer: Canvas2DRenderer) {
     this.cutscene = cutscene
     this.renderer = renderer
     

@@ -5,5 +5,6 @@
 #include <stdint.h>
 
 void saveBMP(const char *filename, const uint8_t *bits, const uint8_t *pal, int w, int h);
+void savePNG(const char *filename, const uint8_t *bits, const uint8_t *pal, int w, int h);
 
 #endif

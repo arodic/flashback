@@ -348,6 +348,11 @@ Recommend starting with:
 3. **Video rendering** - display rooms/sprites
 4. **Game/Piege logic** - the most complex part, do last
 
+### Testing
+- Uses Vitest for testing
+- If playwright browsers are not installed in sandbox try `source .env`
+- If that fails, install playwright browsers with `pnpm exec playwright install chromium 2>&1`
+
 # Memory Management
 
 ## Three-Tier Architecture
